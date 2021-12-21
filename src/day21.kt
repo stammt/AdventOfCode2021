@@ -48,7 +48,7 @@ fun day21part2() {
         // take the next state, progress it, and then add the progressed states
         // to the map (incrementing the count if it is already found).
         // If the state has a winner, add to the winner tally and don't add it back.
-        val state = stateCounts.minByOrNull { it.value }!!
+        val state = stateCounts.minByOrNull { it.key.p1State.score }!!
         val countsOfPreviousState = stateCounts[state.key] ?: 0L
         stateCounts.remove(state.key)
 
