@@ -8,12 +8,22 @@ fun main(args: Array<String>) {
     val sampleinput = ("#############\n" +
             "#...........#\n" +
             "###B#C#B#D###\n" +
+            "  #D#C#B#A#\n" +
+            "  #D#B#A#C#\n" +
+            "  #A#D#C#A#\n" +
+            "  #########").split("\n")
+
+    val sampleinput1 = ("#############\n" +
+            "#...........#\n" +
+            "###B#C#B#D###\n" +
             "  #A#D#C#A#\n" +
             "  #########").split("\n")
 
     val realinput = ("#############\n" +
             "#...........#\n" +
             "###D#C#B#C###\n" +
+            "  #D#C#B#A#\n" +
+            "  #D#B#A#C#\n" +
             "  #D#A#A#B#\n" +
             "  #########").split("\n")
 
@@ -42,44 +52,16 @@ fun main(args: Array<String>) {
 }
 
 val targetRooms = mapOf("A" to 0, "B" to 1, "C" to 2, "D" to 3)
+val targetTypeForRoom = mapOf(0 to "A", 1 to "B", 2 to "C", 3 to "D")
 val costPerStep = mapOf("A" to 1, "B" to 10, "C" to 100, "D" to 1000)
 
 var globalDebug = false
 
 fun day23part1(input: List<String>) {
-    // where each room is in the hallway
-    val doors = mapOf<Int, Int>(2 to 0, 4 to 1, 6 to 2, 8 to 4)
-
-    val debuginput3 = ("#############\n" +
-            "#...B.......#\n" +
-            "###B#C#.#D###\n" +
-            "  #A#D#C#A#\n" +
-            "  #########").split("\n")
-    val debug3 = parseMapState(debuginput3)
-
-    val debuginput4 = ("#############\n" +
-            "#...B.......#\n" +
-            "###B#.#C#D###\n" +
-            "  #A#D#C#A#\n" +
-            "  #########").split("\n")
-    val debug4 = parseMapState(debuginput4)
-
-    val debuginput5 = ("#############\n" +
-            "#...B.D.....#\n" +
-            "###B#.#C#D###\n" +
-            "  #A#.#C#A#\n" +
-            "  #########").split("\n")
-    val debug5 = parseMapState(debuginput5)
-
-    val debuginput6 = ("#############\n" +
-            "#.....D.....#\n" +
-            "###B#.#C#D###\n" +
-            "  #A#B#C#A#\n" +
-            "  #########").split("\n")
-    val debug6 = parseMapState(debuginput6)
 
     // setup initial map
-    val initialState = parseMapState(input)
+    val initialState = parseMapState(input, 4)
+    println("initial: $initialState")
 
     val q = mutableListOf(initialState)
     val completedStates = mutableSetOf<MapState>()
@@ -92,7 +74,7 @@ fun day23part1(input: List<String>) {
 
     var r = 0
 
-    while (q.isNotEmpty() /*&& ++r < 500*/) {
+    while (q.isNotEmpty() /*&& ++r < 250*/) {
         // build all potential next states, and add them to the queue
         val currentState = q.removeAt(0)
         if (q.size % 1000 == 0) {
@@ -107,21 +89,21 @@ fun day23part1(input: List<String>) {
             // If the room is complete, skip it
             if (!currentState.roomIsComplete(i)) {
 //                println("room $i is not complete")
-                if (currentState.rooms[i]!![0] != null) {
-                    val pod = currentState.rooms[i]!![0]!!
+                val roomTop = currentState.rooms[i]!!.indexOfFirst { it != null }
+                if (roomTop != -1) {
+                    val pod = currentState.rooms[i]!![roomTop]!!
                     val costPerStep = costPerStep[pod]!!
                     val targetRoom = targetRooms[pod]!!
-                    var moved = false
                     // Only try to move if this is not the target room.
                     if (targetRoom != i) {
                         val stepsToTargetRoom = currentState.canReachRoomFromRoom(i, targetRoom)
 //                        println("Moving top $pod from room $i slot 1 to room $targetRoom $stepsToTargetRoom")
                         if (stepsToTargetRoom != -1) {
-                            val slotInTargetRoom = if (currentState.rooms[targetRoom]!![1] == null) 1 else 0
-                            val stepsIntoTargetRoom = if (slotInTargetRoom == 0) 1 else 2
-                            val cost = (costPerStep * stepsToTargetRoom) + (costPerStep * stepsIntoTargetRoom)
+                            val slotInTargetRoom = currentState.rooms[targetRoom]!!.indexOfLast { it == null }
+                            val stepsIntoTargetRoom = slotInTargetRoom + 1
+                            val cost = (costPerStep * roomTop) + (costPerStep * stepsToTargetRoom) + (costPerStep * stepsIntoTargetRoom)
                             val nextState = currentState.copy()
-                            nextState.rooms[i]!![0] = null
+                            nextState.rooms[i]!![roomTop] = null
                             nextState.rooms[targetRoom]!![slotInTargetRoom] = pod
                             nextStates.add(nextState to cost)
                         }
@@ -132,40 +114,11 @@ fun day23part1(input: List<String>) {
                     val potentialSteps = currentState.getPotentialHallwayPositionsFromRoom(i)
                     potentialSteps.forEach { step ->
 //                            println("Moving top $pod from room $i to hallway $step")
-                        val cost = costPerStep + (step.second * costPerStep)
+                        val cost = (costPerStep * roomTop) + (step.second * costPerStep)
                         val nextState = currentState.copy()
-                        nextState.rooms[i]!![0] = null
+                        nextState.rooms[i]!![roomTop] = null
                         nextState.hallway[step.first] = pod
                         nextStates.add(nextState to cost)
-                    }
-                } else if (currentState.rooms[i]!![1] != null) {
-                    val pod = currentState.rooms[i]!![1]!!
-                    val costPerStep = costPerStep[pod]!!
-                    // If this pod is not in the right room, see if they can get to the right room
-                    val targetRoom = targetRooms[pod]!!
-                    if (targetRoom != i) {
-                        val stepsToTargetRoom = currentState.canReachRoomFromRoom(i, targetRoom)
-//                        println("Moving bottom $pod from room $i slot 1 to room $targetRoom $stepsToTargetRoom")
-                        if (stepsToTargetRoom != -1) {
-                            val slotInTargetRoom = if (currentState.rooms[targetRoom]!![1] == null) 1 else 0
-                            val stepsIntoTargetRoom = if (slotInTargetRoom == 0) 1 else 2
-                            val cost =
-                                (costPerStep) + (costPerStep * stepsToTargetRoom) + (costPerStep * stepsIntoTargetRoom)
-                            val nextState = currentState.copy()
-                            nextState.rooms[i]!![1] = null
-                            nextState.rooms[targetRoom]!![slotInTargetRoom] = pod
-                            nextStates.add(nextState to cost)
-                        }
-                        // also try to send them into the hallway
-                        val potentialSteps = currentState.getPotentialHallwayPositionsFromRoom(i)
-                        potentialSteps.forEach { step ->
-//                                println("Moving bottom $pod from room $i to hallway $step ")
-                            val cost = (costPerStep * 2) + (step.second * costPerStep)
-                            val nextState = currentState.copy()
-                            nextState.rooms[i]!![1] = null
-                            nextState.hallway[step.first] = pod
-                            nextStates.add(nextState to cost)
-                        }
                     }
                 }
             }
@@ -181,10 +134,10 @@ fun day23part1(input: List<String>) {
                 val stepsToTargetRoom = currentState.canReachRoomFromHallway(i, targetRoom)
 //                println("Checked to send ${pod.type} from hallway $i to target room $targetRoom == $stepsToTargetRoom")
                 if (stepsToTargetRoom != -1) {
-//                    println("Moving $pod from hallway $i to room $targetRoom ")
+//                    println("Moving $pod from hallway $i to room $targetRoom in $currentState")
 
-                    val slotInTargetRoom = if (currentState.rooms[targetRoom]!![1] == null) 1 else 0
-                    val stepsIntoTargetRoom = if (slotInTargetRoom == 0) 1 else 2
+                    val slotInTargetRoom = currentState.rooms[targetRoom]!!.indexOfLast { it == null }
+                    val stepsIntoTargetRoom = slotInTargetRoom + 1
                     val cost = (costPerStep * stepsToTargetRoom) + (costPerStep * stepsIntoTargetRoom)
                     val nextState = currentState.copy()
                     nextState.hallway[i] = null
@@ -219,7 +172,7 @@ fun day23part1(input: List<String>) {
 
 //        completedStates.addAll(nextStates.filter { it.isComplete() })
 
-        globalDebug = false
+//        globalDebug = false
 
 //        if (debug) {
 //            println("Potential next states: $nextStates\n")
@@ -252,28 +205,26 @@ fun getMinCostToAllStates(currentState: MapState, currentCost: Long, stateCosts:
 }
 
 
-fun parseMapState(input: List<String>) : MapState {
+fun parseMapState(input: List<String>, roomDepth: Int) : MapState {
     // map of the hallway
     val hallway = arrayOfNulls<String?>(11)
     // map of rooms
     val rooms = mapOf<Int, Array<String?>>(
-        0 to arrayOfNulls(2),
-        1 to arrayOfNulls(2),
-        2 to arrayOfNulls(2),
-        3 to arrayOfNulls(2)
+        0 to arrayOfNulls(roomDepth),
+        1 to arrayOfNulls(roomDepth),
+        2 to arrayOfNulls(roomDepth),
+        3 to arrayOfNulls(roomDepth)
     )
 
     input[1].drop(1).dropLast(1).forEachIndexed { i, c ->
         if (c != '.') hallway[i] = c.toString()
     }
-    input[2].drop(3).dropLast(3).split("#").forEachIndexed { index, s ->
-        if (s != ".") {
-            rooms[index]!![0] = s
-        }
-    }
-    input[3].drop(3).dropLast(1).split("#").forEachIndexed { index, s ->
-        if (s != ".") {
-            rooms[index]!![1] = s
+
+    for (d in 0 until roomDepth) {
+        input[d + 2].dropWhile { it == ' ' || it == '#' }.dropLastWhile { it == ' ' || it == '#' }.split("#").forEachIndexed { index, s ->
+            if (s != ".") {
+                rooms[index]!![d] = s
+            }
         }
     }
     return MapState(hallway, rooms)
@@ -299,10 +250,10 @@ data class MapState(val hallway: Array<String?>, val rooms: Map<Int, Array<Strin
     }
 
     fun isComplete() : Boolean {
-        return rooms[0]!![0] == "A" && rooms[0]!![1] == "A"
-                && rooms[1]!![0] == "B" && rooms[1]!![1] == "B"
-                && rooms[2]!![0] == "C" && rooms[2]!![1] == "C"
-                && rooms[3]!![0] == "D" && rooms[3]!![1] == "D"
+        return rooms[0]?.filterNot { it == "A" }!!.isEmpty() &&
+                rooms[1]?.filterNot { it == "B" }!!.isEmpty() &&
+                rooms[2]?.filterNot { it == "C" }!!.isEmpty() &&
+                rooms[3]?.filterNot { it == "D" }!!.isEmpty()
     }
 
     fun copy() : MapState {
@@ -325,13 +276,13 @@ data class MapState(val hallway: Array<String?>, val rooms: Map<Int, Array<Strin
         }
         val positions = mutableListOf<Pair<Int, Int>>()
         var steps = 0
-        for (i in start-1 downTo 0) {
+        for (i in start downTo 0) {
             steps += 1
             if (hallway[i] != null) break
             if (!isDoor(i)) positions.add(i to steps)
         }
         steps = 0
-        for (i in start+1 until hallway.size) {
+        for (i in start until hallway.size) {
             steps += 1
             if (hallway[i] != null) break
             if (!isDoor(i)) positions.add(i to steps)
@@ -417,19 +368,9 @@ data class MapState(val hallway: Array<String?>, val rooms: Map<Int, Array<Strin
     fun canEnterRoom(index: Int) : Boolean {
         // if the room is occupied with a pod that is not in its target room, we can't go
         // there yet
-        if (rooms[index]!![0] != null) {
-            if (globalDebug)
-                println("Slot 0 occupied in room $index")
-            return false
-        }
-        if (rooms[index]!![1] != null) {
-            val slot1Target = targetRooms[rooms[index]!![1]!!]!!
-            if (slot1Target != index) {
-                if (globalDebug)
-                    println("Slot 1 occupied with wrong type ${rooms[index]!![1]!!} in room $index")
-                return false
-            }
-        }
+        val type = targetTypeForRoom[index]!!
+
+        if (rooms[index]!!.any {it != null && it != type }) return false
         return true
     }
 
@@ -452,8 +393,9 @@ data class MapState(val hallway: Array<String?>, val rooms: Map<Int, Array<Strin
     override fun toString(): String {
         var s = "isComplete ${isComplete()}\n"
         s += hallway.map { it ?: '.' }.joinToString("") + "\n"
-        s += "##${rooms[0]!![0] ?: '.'}#${rooms[1]!![0] ?: '.'}#${rooms[2]!![0] ?: '.'}#${rooms[3]!![0] ?: '.'}##\n"
-        s += "##${rooms[0]!![1] ?: '.'}#${rooms[1]!![1] ?: '.'}#${rooms[2]!![1] ?: '.'}#${rooms[3]!![1] ?: '.'}##\n"
+        for (d in 0 until rooms[0]!!.size) {
+            s += "##${rooms[0]!![d] ?: '.'}#${rooms[1]!![d] ?: '.'}#${rooms[2]!![d] ?: '.'}#${rooms[3]!![d] ?: '.'}##\n"
+        }
         s += "  #########\n"
         return s
     }
